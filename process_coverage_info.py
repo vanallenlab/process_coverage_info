@@ -66,6 +66,15 @@ def generate_interval_or_gene_coverage_data(interval_or_gene_folder_path, cutoff
                         sep='\t', index=False)
     subprocess.call('gzip {}'.format(filename).split())
 
+    plt.figure()
+    plt.hist(np.array(means[~np.isnan(means)]))
+    plt.title('Mean Fraction Covered at >= 15, Distribution at {} Level: {} Cohort'.format(
+        gene_or_interval.capitalize(),
+        cohort_label))
+    plt.ylabel('{}s'.format(gene_or_interval.capitalize()))
+    plt.xlabel('{} Mean Coverage'.format(gene_or_interval.capitalize()))
+    plt.savefig('{}/{}_{}_mean_coverage'.format(output_folder, cohort_label.replace(' ', '_'), gene_or_interval))
+
 
 def generate_sample_mean_coverage_data(sample_folder_path, cutoff, cohort_label, output_folder):
     sys.stdout.write('Generating sample mean coverage graph')
