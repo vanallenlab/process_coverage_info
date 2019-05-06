@@ -37,24 +37,28 @@ def generate_interval_or_gene_coverage_data(interval_or_gene_folder_path, cutoff
 
     all_combined = pd.DataFrame()
 
+    sys.stdout.write('Looking at {} samples\n'.format(len(glob.glob('{}/*'.format(interval_or_gene_folder_path)))))
     for filename in glob.glob('{}/*'.format(interval_or_gene_folder_path)):
-        interval_summary = pd.read_csv(filename, sep='\t', header='infer')
-        columns = interval_summary.columns
+        try:
+            interval_summary = pd.read_csv(filename, sep='\t', header='infer')
+            columns = interval_summary.columns
 
-        for column in columns:
-            if '%_above_15' in column:
-                fifteen_column_name = column
+            for column in columns:
+                if '%_above_15' in column:
+                    fifteen_column_name = column
 
-        slimmed = interval_summary[[index_col_name, fifteen_column_name]]
-        sample_name = fifteen_column_name.split('_%')[0]
+            slimmed = interval_summary[[index_col_name, fifteen_column_name]]
+            sample_name = fifteen_column_name.split('_%')[0]
 
-        slimmed[sample_name] = slimmed[fifteen_column_name]
-        slimmed = slimmed.drop(fifteen_column_name, axis=1)
+            slimmed[sample_name] = slimmed[fifteen_column_name]
+            slimmed = slimmed.drop(fifteen_column_name, axis=1)
 
-        if all_combined.empty:
-            all_combined = slimmed
-        else:
-            all_combined = pd.concat([all_combined, slimmed[[sample_name]]], axis=1)
+            if all_combined.empty:
+                all_combined = slimmed
+            else:
+                all_combined = pd.concat([all_combined, slimmed[[sample_name]]], axis=1)
+        except:
+            sys.stdout.write("Ran into issues on file {}\n".format(filename))
 
     all_combined.index = all_combined[index_col_name]
     means = all_combined.drop(index_col_name, axis=1).mean(axis=1)
@@ -77,9 +81,11 @@ def generate_interval_or_gene_coverage_data(interval_or_gene_folder_path, cutoff
 
 
 def generate_sample_mean_coverage_data(sample_folder_path, cutoff, cohort_label, output_folder):
-    sys.stdout.write('Generating sample mean coverage graph')
+    sys.stdout.write('Generating sample mean coverage graph\n')
     mean_coverages = []
     sample_id_to_mean_coverage = {}
+
+    sys.stdout.write('Looking at {} samples\n'.format(len(glob.glob('{}/*'.format(sample_folder_path)))))
     for f in glob.glob('{}/*'.format(sample_folder_path)):
         try:
             info = pd.read_csv(f, sep='\t', header='infer')
