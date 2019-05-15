@@ -72,7 +72,7 @@ def generate_interval_or_gene_coverage_data(interval_or_gene_folder_path, cutoff
 
     plt.figure()
     plt.hist(np.array(means[~np.isnan(means)]))
-    plt.title('Mean Fraction Covered at >= 15, Distribution at {} Level: {} Cohort'.format(
+    plt.title('Mean Fraction Covered at >= 15, Distribution at {} Level:\n{} Cohort'.format(
         gene_or_interval.capitalize(),
         cohort_label))
     plt.ylabel('{}s'.format(gene_or_interval.capitalize()))
@@ -100,7 +100,7 @@ def generate_sample_mean_coverage_data(sample_folder_path, cutoff, cohort_label,
     # Make a histogram of all samples in the cohort
     plt.hist(np.array(mean_coverages))
     plt.axvline(x=cutoff, color='r')
-    plt.title('Sample Mean Coverage Distribution: {} Cohort'.format(cohort_label))
+    plt.title('Sample Mean Coverage Distribution\n{} Cohort'.format(cohort_label))
     plt.ylabel('Samples')
     plt.xlabel('Sample Mean Coverage')
     plt.savefig('{}/{}_sample_mean_coverage'.format(output_folder, cohort_label.replace(' ', '_')))
@@ -110,7 +110,7 @@ def generate_sample_mean_coverage_data(sample_folder_path, cutoff, cohort_label,
     lower_than_cutoff = [v for v in mean_coverages if v < cutoff]
     plt.hist(np.array(lower_than_cutoff))
     plt.axvline(x=cutoff, color='r')
-    plt.title('Sample Mean Coverage Distribution for Samples below Cutoff of {}: {} Cohort'.format(cutoff,
+    plt.title('Sample Mean Coverage Distribution for Samples below Cutoff of {}:\n{} Cohort'.format(cutoff,
                                                                                                    cohort_label))
     plt.ylabel('Samples')
     plt.xlabel('Sample Mean Coverage')
