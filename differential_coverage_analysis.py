@@ -12,6 +12,7 @@ def mann_whitney_u(pool_args):
     gene_or_interval = pool_args.get('gene_or_interval')
     case_results = np.array(pool_args.get('case_results'))
     control_results = np.array(pool_args.get('control_results'))
+    percentile_value = pool_args.get('percentile_value')
     case_median = np.median(case_results)
     control_median = np.median(control_results)
 
@@ -28,16 +29,44 @@ def mann_whitney_u(pool_args):
             directionality = "ValueError"
         pvalue_one_sided = None
 
+    # Also compare the lowest third of values in each cohort
+    case_percentile = np.percentile(case_results, percentile_value)
+    control_percentile = np.percentile(control_results, percentile_value)
+    case_values_below_percentile = np.array([r for r in case_results if r <= case_percentile])
+    control_values_below_percentile = np.array([r for r in control_results if r <= control_percentile])
+    percentile_case_median = np.median(case_values_below_percentile)
+    percentile_control_median = np.median(control_values_below_percentile)
+
+    try:
+        percentile_statistic, percentile_pvalue_one_sided = mannwhitneyu(case_values_below_percentile,
+                                                                         control_values_below_percentile)
+
+        percentile_directionality = 'same'
+        if percentile_pvalue_one_sided < 0.05:
+            percentile_directionality = 'cases_higher' if percentile_case_median > percentile_control_median\
+                else 'controls_higher'
+    except ValueError:
+        if percentile_case_median == case_values_below_percentile.min() == case_values_below_percentile.max() == \
+                percentile_control_median == control_values_below_percentile.min() == control_values_below_percentile.max():
+            percentile_directionality = 'values_all_identical'
+        else:
+            percentile_directionality = "ValueError"
+        percentile_pvalue_one_sided = None
+
     return {
         'index': gene_or_interval,
         'directionality': directionality,
         'pvalue': pvalue_one_sided,
         'case_median': case_median,
-        'control_median': control_median
+        'control_median': control_median,
+        'case_{}/100_percentile'.format(percentile_value): case_percentile,
+        'control_{}/100_percentile'.format(percentile_value): control_percentile,
+        'percentile_directionality': percentile_directionality,
+        'percentile_pvalue': percentile_pvalue_one_sided
     }
 
 
-def build_pool_arguments(fractions_case_df, fractions_control_df):
+def build_pool_arguments(fractions_case_df, fractions_control_df, percentile_value=33):
     """Build up the array with arguments that will be fed to the thread pool"""
     pool_args = []
 
@@ -50,7 +79,8 @@ def build_pool_arguments(fractions_case_df, fractions_control_df):
 
         args = ({'gene_or_interval': interval,
                  'case_results': case_results,
-                 'control_results': control_results})
+                 'control_results': control_results,
+                 'percentile_value': percentile_value})
         pool_args.append(args)
     return pool_args
 
@@ -80,6 +110,7 @@ def test_genes_or_intervals_coverage(
         fractions_case_file,
         fractions_control_file,
         sample_to_exclude_list,
+        percentile_value=33,
         threads=8):
     """Set up a multithreaded approach to running the Mann Whitney on each interval/gene between control and case"""
     fractions_case = pd.read_csv(fractions_case_file, sep='\t', index_col=0, header='infer')
@@ -101,7 +132,7 @@ def test_genes_or_intervals_coverage(
     sys.stdout.write('Number of samples in controls after removing samples: {}\n'.format(len(fractions_control.columns)))
 
     pool = ThreadPool(threads)
-    pool_args = build_pool_arguments(fractions_case, fractions_control)
+    pool_args = build_pool_arguments(fractions_case, fractions_control, percentile_value=percentile_value)
 
     sys.stdout.write("Running Mann-Whitney U test\n")
     num_finished = 0
@@ -142,12 +173,14 @@ def main():
 
     # Gene or interval argument should be 'gene' or 'interval' (duh)
     parser.add_argument('--gene_or_interval', metavar='gene_or_interval', type=str, default="")
+    parser.add_argument('--percentile_value', metavar='percentile_value', type=int, default=33)
     parser.add_argument('--output_folder', metavar='output_folder', type=str)
     args = parser.parse_args()
 
     # Process arguments
     fractions_case = args.fractions_case
     fractions_control = args.fractions_control
+    percentile_value = args.percentile_value
 
     samples_to_exclude = args.samples_to_exclude
     if samples_to_exclude is None:
@@ -162,6 +195,7 @@ def main():
         fractions_case,
         fractions_control,
         samples_to_exclude,
+        percentile_value=percentile_value,
         threads=8
     )
 
