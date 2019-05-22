@@ -1,6 +1,8 @@
 import matplotlib
 matplotlib.use('Agg') # If plots don't display, try commenting out this line
 
+from multiprocessing.dummy import Pool as ThreadPool
+
 import argparse
 import subprocess
 import sys
@@ -80,22 +82,39 @@ def generate_interval_or_gene_coverage_data(interval_or_gene_folder_path, cutoff
     plt.savefig('{}/{}_{}_mean_coverage'.format(output_folder, cohort_label.replace(' ', '_'), gene_or_interval))
 
 
+def get_sample_id_and_mean_coverage(pool_args):
+    filename = pool_args.get('filename')
+    try:
+        info = pd.read_csv(filename, sep='\t', header='infer')
+        sample_id = info['sample_id'].loc[0]
+        sample_mean_coverage = info['mean'].loc[1]
+    except:
+        sys.stdout.write("Couldn't read sample summary info from {}\n".format(f))
+        sample_id = None
+        sample_mean_coverage = None
+    return {'sample_id': sample_id,
+            'sample_mean_coverage': sample_mean_coverage}
+
+
 def generate_sample_mean_coverage_data(sample_folder_path, cutoff, cohort_label, output_folder):
     sys.stdout.write('Generating sample mean coverage graph\n')
     mean_coverages = []
     sample_id_to_mean_coverage = {}
 
     sys.stdout.write('Looking at {} samples\n'.format(len(glob.glob('{}/*'.format(sample_folder_path)))))
+    pool_args = []
+    pool = ThreadPool(10)
+
     for f in glob.glob('{}/*'.format(sample_folder_path)):
-        try:
-            info = pd.read_csv(f, sep='\t', header='infer')
-            sample_id = info['sample_id'].loc[0]
-            sample_mean_coverage = info['mean'].loc[1]
+        pool_args.append({'filename': f})
+
+    for result in pool.imap(get_sample_id_and_mean_coverage, pool_args):
+        sample_mean_coverage = result.get('sample_mean_coverage')
+        sample_id = result.get('sample_id')
+        sys.stdout.write('Got info for sample {}\n'.format(sample_id))
+        if sample_id:
             mean_coverages.append(sample_mean_coverage)
             sample_id_to_mean_coverage[sample_id] = sample_mean_coverage
-        except:
-            sys.stdout.write("Couldn't read sample summary info from {}\n".format(f))
-            pass
 
     # Make a histogram of all samples in the cohort
     plt.hist(np.array(mean_coverages))
