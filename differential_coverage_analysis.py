@@ -4,7 +4,7 @@ import pandas as pd
 from multiprocessing.dummy import Pool as ThreadPool
 from collections import defaultdict
 import sys
-from scipy.stats import mannwhitneyu
+from scipy.stats import mannwhitneyu, fisher_exact
 
 
 def mann_whitney_u(pool_args):
@@ -32,26 +32,37 @@ def mann_whitney_u(pool_args):
     # Also compare the lowest third of values in each cohort
     case_percentile = np.percentile(case_results, percentile_value)
     control_percentile = np.percentile(control_results, percentile_value)
-    case_values_below_percentile = np.array([r for r in case_results if r <= case_percentile])
-    control_values_below_percentile = np.array([r for r in control_results if r <= control_percentile])
-    percentile_case_median = np.median(case_values_below_percentile)
-    percentile_control_median = np.median(control_values_below_percentile)
+    case_values_above_percentile = np.array([r for r in case_results if r >= case_percentile])
+    control_values_above_percentile = np.array([r for r in control_results if r >= control_percentile])
+    percentile_case_median = np.median(case_values_above_percentile)
+    percentile_control_median = np.median(control_values_above_percentile)
 
     try:
-        percentile_statistic, percentile_pvalue_one_sided = mannwhitneyu(case_values_below_percentile,
-                                                                         control_values_below_percentile)
+        percentile_statistic, percentile_pvalue_one_sided = mannwhitneyu(case_values_above_percentile,
+                                                                         control_values_above_percentile)
 
         percentile_directionality = 'same'
         if percentile_pvalue_one_sided < 0.05:
             percentile_directionality = 'cases_higher' if percentile_case_median > percentile_control_median\
                 else 'controls_higher'
     except ValueError:
-        if percentile_case_median == case_values_below_percentile.min() == case_values_below_percentile.max() == \
-                percentile_control_median == control_values_below_percentile.min() == control_values_below_percentile.max():
+        if percentile_case_median == case_values_above_percentile.min() == case_values_above_percentile.max() == \
+                percentile_control_median == control_values_above_percentile.min() == control_values_above_percentile.max():
             percentile_directionality = 'values_all_identical'
         else:
             percentile_directionality = "ValueError"
         percentile_pvalue_one_sided = None
+
+    # Fisher's exact on the medians instead of the means? This ensures that outliers don't skew the results
+    fisher_OR, fisher_p  = fisher_exact([[control_median * len(control_results), len(control_results)],
+                                         [case_median * len(case_results), len(case_results)]])
+    if fisher_p > 0.05:
+        fisher_directionality = 'same'
+    else:
+        if fisher_OR > 1:
+            fisher_directionality = 'controls_higher'
+        else:
+            fisher_directionality = 'cases_higher'
 
     return {
         'index': gene_or_interval,
@@ -59,10 +70,13 @@ def mann_whitney_u(pool_args):
         'pvalue': pvalue_one_sided,
         'case_median': case_median,
         'control_median': control_median,
-        'case_{}/100_percentile'.format(percentile_value): case_percentile,
-        'control_{}/100_percentile'.format(percentile_value): control_percentile,
-        'percentile_directionality': percentile_directionality,
-        'percentile_pvalue': percentile_pvalue_one_sided
+        'case_above_{}/100_percentile'.format(percentile_value): case_percentile,
+        'control_above_{}/100_percentile'.format(percentile_value): control_percentile,
+        'above_percentile_directionality': percentile_directionality,
+        'above_percentile_pvalue': percentile_pvalue_one_sided,
+        'medians_fisher_OR': fisher_OR,
+        'medians_fisher_pvalue': fisher_p,
+        'medians_fisher_directionality': fisher_directionality
     }
 
 
@@ -134,7 +148,7 @@ def test_genes_or_intervals_coverage(
     pool = ThreadPool(threads)
     pool_args = build_pool_arguments(fractions_case, fractions_control, percentile_value=percentile_value)
 
-    sys.stdout.write("Running Mann-Whitney U test\n")
+    sys.stdout.write("Running tests\n")
     num_finished = 0
     results = []
     # Execute the mann whitney comparison on each of the pool arguments, appending the outputs
