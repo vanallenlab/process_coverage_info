@@ -115,7 +115,7 @@ def generate_sample_mean_coverage_data(sample_folder_path, cutoff, cohort_label,
         if sample_id:
             mean_coverages.append(sample_mean_coverage)
             sample_id_to_mean_coverage[sample_id] = sample_mean_coverage
-
+    """
     sys.stdout.write('Plotting histograms for sample level mean coverage\n')
     # Make a histogram of all samples in the cohort
     plt.hist(np.array(mean_coverages), bins=50, histtype='step')
@@ -135,7 +135,7 @@ def generate_sample_mean_coverage_data(sample_folder_path, cutoff, cohort_label,
     plt.ylabel('Samples')
     plt.xlabel('Sample Mean Coverage')
     plt.savefig('{}/{}_sample_mean_coverage_below_cutoff'.format(output_folder, cohort_label.replace(' ', '_')))
-
+    """
     sys.stdout.write("Writing sample level mean coverage output\n")
     # Output list of all samples with corresponding mean sample coverage and whether they passed the coverage cutoff
     with open('{}/{}_mean_coverage_by_sample_id.tsv'.format(output_folder, cohort_label), 'w') as f:
