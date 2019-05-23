@@ -13,4 +13,4 @@ RUN pip install scipy
 
 RUN apt-get clean
 RUN apt-get install tabix
-RUN ulimit -Hn 10240
+RUN ulimit 10240
