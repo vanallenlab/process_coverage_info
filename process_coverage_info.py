@@ -116,8 +116,9 @@ def generate_sample_mean_coverage_data(sample_folder_path, cutoff, cohort_label,
             mean_coverages.append(sample_mean_coverage)
             sample_id_to_mean_coverage[sample_id] = sample_mean_coverage
 
+    sys.stdout.write('Plotting histograms for sample level mean coverage\n')
     # Make a histogram of all samples in the cohort
-    plt.hist(np.array(mean_coverages))
+    plt.hist(np.array(mean_coverages), bins=50, histtype='step')
     plt.axvline(x=cutoff, color='r')
     plt.title('Sample Mean Coverage Distribution\n{} Cohort'.format(cohort_label))
     plt.ylabel('Samples')
@@ -127,7 +128,7 @@ def generate_sample_mean_coverage_data(sample_folder_path, cutoff, cohort_label,
     plt.figure()
     # Make a histogram of the ones that are lower than the cutoff
     lower_than_cutoff = [v for v in mean_coverages if v < cutoff]
-    plt.hist(np.array(lower_than_cutoff))
+    plt.hist(np.array(lower_than_cutoff), bins=50, histtype='step')
     plt.axvline(x=cutoff, color='r')
     plt.title('Sample Mean Coverage Distribution for Samples below Cutoff of {}:\n{} Cohort'.format(cutoff,
                                                                                                    cohort_label))
@@ -135,6 +136,7 @@ def generate_sample_mean_coverage_data(sample_folder_path, cutoff, cohort_label,
     plt.xlabel('Sample Mean Coverage')
     plt.savefig('{}/{}_sample_mean_coverage_below_cutoff'.format(output_folder, cohort_label.replace(' ', '_')))
 
+    sys.stdout.write("Writing sample level mean coverage output\n")
     # Output list of all samples with corresponding mean sample coverage and whether they passed the coverage cutoff
     with open('{}/{}_mean_coverage_by_sample_id.tsv'.format(output_folder, cohort_label), 'w') as f:
         f.write('sample_id\tmean_sample_coverage\tpassed_threshold\n')
