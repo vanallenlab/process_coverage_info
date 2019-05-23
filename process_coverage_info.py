@@ -108,6 +108,7 @@ def generate_sample_mean_coverage_data(sample_folder_path, cutoff, cohort_label,
     for f in glob.glob('{}/*'.format(sample_folder_path)):
         pool_args.append({'filename': f})
 
+    sys.stdout.write('Loading each sample info...\n')
     for result in pool.imap(get_sample_id_and_mean_coverage, pool_args):
         sample_mean_coverage = result.get('sample_mean_coverage')
         sample_id = result.get('sample_id')
