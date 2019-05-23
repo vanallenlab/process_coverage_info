@@ -32,6 +32,29 @@ example_sample_gene_summary_files
 """
 
 
+def get_interval_or_gene_coverage_for_file(pool_args):
+    filename = pool_args.get('filename')
+    gene_or_interval = pool_args.get('gene_or_interval')
+    index_col_name = 'Target' if gene_or_interval == 'interval' else 'Gene'
+    try:
+        interval_summary = pd.read_csv(filename, sep='\t', header='infer')
+        columns = interval_summary.columns
+
+        for column in columns:
+            if '%_above_15' in column:
+                fifteen_column_name = column
+
+        slimmed = interval_summary[[index_col_name, fifteen_column_name]]
+        sample_name = fifteen_column_name.split('_%')[0]
+
+        slimmed[sample_name] = slimmed[fifteen_column_name]
+        slimmed = slimmed.drop(fifteen_column_name, axis=1)
+        return {'slimmed': slimmed, 'sample_name': sample_name}
+    except:
+        sys.stdout.write("Ran into issues on file {}\n".format(filename))
+        return {'slimmed': None, 'sample_name': None}
+
+
 def generate_interval_or_gene_coverage_data(interval_or_gene_folder_path, cutoff, cohort_label, output_folder,
                                             gene_or_interval):
     assert(gene_or_interval in ['gene', 'interval'])
@@ -39,28 +62,36 @@ def generate_interval_or_gene_coverage_data(interval_or_gene_folder_path, cutoff
 
     all_combined = pd.DataFrame()
 
-    sys.stdout.write('Looking at {} samples\n'.format(len(glob.glob('{}/*'.format(interval_or_gene_folder_path)))))
+    sys.stdout.write('Gene/Interval: Looking at {} samples\n'.format(len(glob.glob('{}/*'.format(interval_or_gene_folder_path)))))
+
+    pool_args = []
+    pool = ThreadPool(10)
+
+    total_samples = 0
     for filename in glob.glob('{}/*'.format(interval_or_gene_folder_path)):
-        try:
-            interval_summary = pd.read_csv(filename, sep='\t', header='infer')
-            columns = interval_summary.columns
+        total_samples += 1
+        sys.stdout.write('Gene/Interval: {}\n'.format(filename))
+        pool_args.append({'filename': filename,
+                          'gene_or_interval': gene_or_interval})
 
-            for column in columns:
-                if '%_above_15' in column:
-                    fifteen_column_name = column
+    sys.stdout.write('Total samples: {}\n'.format(total_samples))
+    sys.stdout.write('Gathering gene/interval results\n')
 
-            slimmed = interval_summary[[index_col_name, fifteen_column_name]]
-            sample_name = fifteen_column_name.split('_%')[0]
+    results_gathered = 0
+    results = []
+    for result in pool.imap(get_interval_or_gene_coverage_for_file, pool_args):
+        sample_name = result.get('sample_name')
+        slimmed = result.get('slimmed')
 
-            slimmed[sample_name] = slimmed[fifteen_column_name]
-            slimmed = slimmed.drop(fifteen_column_name, axis=1)
-
+        results_gathered += 1
+        sys.stdout.write('Processed {}/{} samples for {} info\n'.format(results_gathered,
+                                                                        total_samples,
+                                                                        gene_or_interval))
+        if sample_name:
             if all_combined.empty:
                 all_combined = slimmed
             else:
                 all_combined = pd.concat([all_combined, slimmed[[sample_name]]], axis=1)
-        except:
-            sys.stdout.write("Ran into issues on file {}\n".format(filename))
 
     all_combined.index = all_combined[index_col_name]
     means = all_combined.drop(index_col_name, axis=1).mean(axis=1)
@@ -72,6 +103,7 @@ def generate_interval_or_gene_coverage_data(interval_or_gene_folder_path, cutoff
                         sep='\t', index=False)
     subprocess.call('gzip {}'.format(filename).split())
 
+    """
     plt.figure()
     plt.hist(np.array(means[~np.isnan(means)]))
     plt.title('Mean Fraction Covered at >= 15, Distribution at {} Level:\n{} Cohort'.format(
@@ -80,6 +112,7 @@ def generate_interval_or_gene_coverage_data(interval_or_gene_folder_path, cutoff
     plt.ylabel('{}s'.format(gene_or_interval.capitalize()))
     plt.xlabel('{} Mean Coverage'.format(gene_or_interval.capitalize()))
     plt.savefig('{}/{}_{}_mean_coverage'.format(output_folder, cohort_label.replace(' ', '_'), gene_or_interval))
+    """
 
 
 def get_sample_id_and_mean_coverage(pool_args):
