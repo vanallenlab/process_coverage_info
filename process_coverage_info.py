@@ -74,26 +74,24 @@ def generate_interval_or_gene_coverage_data(interval_or_gene_folder_path, cutoff
     sys.stdout.write('Gathering gene/interval results\n')
 
     results_gathered = 0
-    results = []
-    for result in pool.imap(get_interval_or_gene_coverage_for_file, pool_args):
+    for i,  result in enumerate(pool.imap(get_interval_or_gene_coverage_for_file, pool_args)):
         results_gathered += 1
         sys.stdout.write('Processed {}/{} samples for {} info\n'.format(results_gathered,
                                                                         total_samples,
                                                                         gene_or_interval))
-        results.append(result)
-
-    sys.stdout.write('Outputting the results from each sample for {}...\n'.format(gene_or_interval))
-    # Output the index for the first one, but not any subsequent ones so we can efficiently paste them together after
-    for i, result in enumerate(results):
         sample_name = result.get('sample_name')
         slimmed = result.get('slimmed')
         if sample_name:
             output = slimmed[[sample_name]]
             if i == 0:
+                # Output the index for the first one, but not any subsequent ones so we can efficiently paste
+                # them together after
                 output.index = slimmed[index_col_name]
                 output.to_csv('{}_{}_{}_tmp.tsv'.format(i, sample_name, gene_or_interval), sep='\t', index=True)
             elif i > 0:
                 output.to_csv('{}_{}_{}_tmp.tsv'.format(i, sample_name, gene_or_interval), sep='\t', index=False)
+
+    sys.stdout.write('Outputting the results from each sample for {}...\n'.format(gene_or_interval))
 
     final_filename = '{}/{}_{}_fraction_above_15_coverage_per_sample.tsv'.format(output_folder, cohort_label,
                                                                            gene_or_interval)
@@ -178,9 +176,12 @@ def main():
     gene_folder = args.gene
     output = args.output
 
-    generate_sample_mean_coverage_data(sample_folder, cutoff, label, output)
-    generate_interval_or_gene_coverage_data(interval_folder, cutoff, label, output, 'interval')
-    generate_interval_or_gene_coverage_data(gene_folder, cutoff, label, output, 'gene')
+    if sample_folder:
+        generate_sample_mean_coverage_data(sample_folder, cutoff, label, output)
+    if interval_folder:
+        generate_interval_or_gene_coverage_data(interval_folder, cutoff, label, output, 'interval')
+    if gene_folder:
+        generate_interval_or_gene_coverage_data(gene_folder, cutoff, label, output, 'gene')
 
 
 if __name__ == '__main__':
