@@ -7,6 +7,10 @@ import sys
 from scipy.stats import mannwhitneyu, fisher_exact
 
 
+def warning(text):
+    sys.stderr.write('{}\n'.format(text))
+
+
 def mann_whitney_u(pool_args):
     """Conduct the Mann Whitney statistical test, returning the significance and directionality of the comparison"""
     gene_or_interval = pool_args.get('gene_or_interval')
@@ -17,18 +21,22 @@ def mann_whitney_u(pool_args):
         case_median = np.median(case_results)
     except ValueError:
         case_median = 0
+        warning('Case median: strange/null values in {}'.format(gene_or_interval))
     try:
         control_median = np.median(control_results)
     except ValueError:
         control_median = 0
+        warning('Control median: strange/null values in {}'.format(gene_or_interval))
     try:
         case_mean = np.mean(case_results)
     except ValueError:
         case_mean = 0
+        warning('Case mean: strange/null values in {}'.format(gene_or_interval))
     try:
         control_mean = np.mean(control_results)
     except ValueError:
         control_mean = 0
+        warning('Control mean: strange/null values in {}'.format(gene_or_interval))
 
     # Fisher's exact on the means
     try:
@@ -43,6 +51,7 @@ def mann_whitney_u(pool_args):
                 mean_fisher_directionality = 'cases_higher'
     except ValueError:
         mean_fisher_OR, mean_fisher_p, mean_fisher_directionality = 0 , 0, 0
+        warning('Fisher mean: strange/null values in {}'.format(gene_or_interval))
 
     # Fisher's exact on the medians instead of the means? This ensures that outliers don't skew the results
     try:
@@ -57,6 +66,7 @@ def mann_whitney_u(pool_args):
                 fisher_directionality = 'cases_higher'
     except ValueError:
         fisher_p, fisher_OR, fisher_directionality = 0, 0, 0
+        warning('Fisher median: strange/null values in {}'.format(gene_or_interval))
 
     return {
         'index': gene_or_interval,
