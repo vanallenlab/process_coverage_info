@@ -12,32 +12,51 @@ def mann_whitney_u(pool_args):
     gene_or_interval = pool_args.get('gene_or_interval')
     case_results = np.array(pool_args.get('case_results'))
     control_results = np.array(pool_args.get('control_results'))
-    case_median = np.median(case_results)
-    control_median = np.median(control_results)
-    case_mean = np.mean(case_results)
-    control_mean = np.mean(control_results)
+
+    try:
+        case_median = np.median(case_results)
+    except ValueError:
+        case_median = 0
+    try:
+        control_median = np.median(control_results)
+    except ValueError:
+        control_median = 0
+    try:
+        case_mean = np.mean(case_results)
+    except ValueError:
+        case_mean = 0
+    try:
+        control_mean = np.mean(control_results)
+    except ValueError:
+        control_mean = 0
 
     # Fisher's exact on the means
-    mean_fisher_OR, mean_fisher_p = fisher_exact([[control_mean * len(control_results), len(control_results)],
-                                         [case_mean * len(case_results), len(case_results)]])
-    if mean_fisher_p > 0.05:
-        mean_fisher_directionality = 'same'
-    else:
-        if mean_fisher_OR > 1:
-            mean_fisher_directionality = 'controls_higher'
+    try:
+        mean_fisher_OR, mean_fisher_p = fisher_exact([[control_mean * len(control_results), len(control_results)],
+                                             [case_mean * len(case_results), len(case_results)]])
+        if mean_fisher_p > 0.05:
+            mean_fisher_directionality = 'same'
         else:
-            mean_fisher_directionality = 'cases_higher'
+            if mean_fisher_OR > 1:
+                mean_fisher_directionality = 'controls_higher'
+            else:
+                mean_fisher_directionality = 'cases_higher'
+    except ValueError:
+        mean_fisher_OR, mean_fisher_p, mean_fisher_directionality = 0 , 0, 0
 
     # Fisher's exact on the medians instead of the means? This ensures that outliers don't skew the results
-    fisher_OR, fisher_p = fisher_exact([[control_median * len(control_results), len(control_results)],
-                                         [case_median * len(case_results), len(case_results)]])
-    if fisher_p > 0.05:
-        fisher_directionality = 'same'
-    else:
-        if fisher_OR > 1:
-            fisher_directionality = 'controls_higher'
+    try:
+        fisher_OR, fisher_p = fisher_exact([[control_median * len(control_results), len(control_results)],
+                                             [case_median * len(case_results), len(case_results)]])
+        if fisher_p > 0.05:
+            fisher_directionality = 'same'
         else:
-            fisher_directionality = 'cases_higher'
+            if fisher_OR > 1:
+                fisher_directionality = 'controls_higher'
+            else:
+                fisher_directionality = 'cases_higher'
+    except ValueError:
+        fisher_p, fisher_OR, fisher_directionality = 0, 0, 0
 
     return {
         'index': gene_or_interval,

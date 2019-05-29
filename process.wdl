@@ -1,7 +1,7 @@
 workflow process_coverage_info {
-	File sampleSummaryFilesGzipped
-    File intervalSummaryFilesGzipped
-    File geneSummaryFilesGzipped
+	Array[File] sampleSummaryFiles
+    Array[File] intervalSummaryFiles
+    Array[File] geneSummaryFiles
     Int diskSpace
     String memory
     String label
@@ -9,10 +9,11 @@ workflow process_coverage_info {
     Int preemptible
     Int bootSizeDiskGb=100
     String dockerVersion
+    Int threads=10
 
     call ProcessCoverageInfoSampleTask {
     	input:
-        	sampleSummaryFilesGzipped=sampleSummaryFilesGzipped,
+        	sampleSummaryFiles=sampleSummaryFiles,
         	diskSpace=diskSpace,
             memory=memory,
             label=label,
@@ -24,31 +25,33 @@ workflow process_coverage_info {
 
     call ProcessCoverageInfoGeneTask {
     	input:
-            geneSummaryFilesGzipped=geneSummaryFilesGzipped,
+            geneSummaryFiles=geneSummaryFiles,
         	diskSpace=diskSpace,
             memory=memory,
             label=label,
             cutoff=cutoff,
             bootSizeDiskGb=bootSizeDiskGb,
             preemptible=preemptible,
-            dockerVersion=dockerVersion
+            dockerVersion=dockerVersion,
+            threads=threads
     }
 
     call ProcessCoverageInfoIntervalTask {
     	input:
-            intervalSummaryFilesGzipped=intervalSummaryFilesGzipped,
+            intervalSummaryFiles=intervalSummaryFiles,
         	diskSpace=diskSpace,
             memory=memory,
             label=label,
             cutoff=cutoff,
             bootSizeDiskGb=bootSizeDiskGb,
             preemptible=preemptible,
-            dockerVersion=dockerVersion
+            dockerVersion=dockerVersion,
+            threads=threads
     }
 }
 
 task ProcessCoverageInfoSampleTask {
-	File sampleSummaryFilesGzipped
+	Array[File] sampleSummaryFiles
     Int diskSpace
     String memory
     String label
@@ -70,7 +73,10 @@ task ProcessCoverageInfoSampleTask {
            	sleep 15;
        	done &
 
-        tar -xvzf ${sampleSummaryFilesGzipped}
+        mkdir sample_summary_files
+
+        echo "mv ${sep = ' ' sampleSummaryFiles} sample_summary_files"
+        mv ${sep = ' ' sampleSummaryFiles} sample_summary_files
 
         echo "ls -lh"
         ls -lh
@@ -104,7 +110,7 @@ task ProcessCoverageInfoSampleTask {
 }
 
 task ProcessCoverageInfoGeneTask {
-    File geneSummaryFilesGzipped
+    Array[File] geneSummaryFiles
     Int diskSpace
     String memory
     String label
@@ -112,6 +118,7 @@ task ProcessCoverageInfoGeneTask {
     Int preemptible
     String bootSizeDiskGb
     String dockerVersion
+	Int threads
 
     command <<<
     	# log resource usage for debugging purposes
@@ -126,7 +133,10 @@ task ProcessCoverageInfoGeneTask {
            	sleep 15;
        	done &
 
-        tar -xvzf ${geneSummaryFilesGzipped}
+        mkdir gene_summary_files
+
+        echo "mv ${sep = ' ' geneSummaryFiles} gene_summary_files"
+        mv ${sep = ' ' geneSummaryFiles} gene_summary_files
 
         echo "ls -lh"
         ls -lh
@@ -139,7 +149,7 @@ task ProcessCoverageInfoGeneTask {
 
         # Run Python splice junction discovery script
         echo "python /process_coverage_info.py --label ${label} --cutoff ${cutoff} --output /cromwell_root/ --gene gene_summary_files"
-        python /process_coverage_info.py --label ${label} --cutoff ${cutoff} --output /cromwell_root/ --gene gene_summary_files
+        python /process_coverage_info.py --label ${label} --cutoff ${cutoff} --output /cromwell_root/ --gene gene_summary_files --threads ${threads}
 
         echo "Output files in /cromwell_root/:"
         ls -lh /cromwell_root/
@@ -160,7 +170,7 @@ task ProcessCoverageInfoGeneTask {
 }
 
 task ProcessCoverageInfoIntervalTask {
-    File intervalSummaryFilesGzipped
+    Array[File] intervalSummaryFiles
     Int diskSpace
     String memory
     String label
@@ -168,6 +178,7 @@ task ProcessCoverageInfoIntervalTask {
     Int preemptible
     String bootSizeDiskGb
     String dockerVersion
+    Int threads
 
     command <<<
     	# log resource usage for debugging purposes
@@ -182,7 +193,10 @@ task ProcessCoverageInfoIntervalTask {
            	sleep 15;
        	done &
 
-        tar -xvzf ${intervalSummaryFilesGzipped}
+        mkdir interval_summary_files
+
+        echo "mv ${sep = ' ' intervalSummaryFiles} interval_summary_files"
+        mv ${sep = ' ' intervalSummaryFiles} interval_summary_files
 
         echo "ls -lh"
         ls -lh
@@ -195,7 +209,7 @@ task ProcessCoverageInfoIntervalTask {
 
         # Run Python splice junction discovery script
         echo "python /process_coverage_info.py --label ${label} --cutoff ${cutoff} --output /cromwell_root/ --interval interval_summary_files"
-        python /process_coverage_info.py --label ${label} --cutoff ${cutoff} --output /cromwell_root/ --interval interval_summary_files
+        python /process_coverage_info.py --label ${label} --cutoff ${cutoff} --output /cromwell_root/ --interval interval_summary_files --threads ${threads}
 
         echo "Output files in /cromwell_root/:"
         ls -lh /cromwell_root/
