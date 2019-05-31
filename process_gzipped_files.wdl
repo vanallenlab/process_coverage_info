@@ -1,146 +1,68 @@
-workflow EnrichmentAnalysisWorkflow {
-    File geneSampleCoverageControlGz
-    File geneSampleCoverageCaseGz
-    File intervalSampleCoverageControlGz
-    File intervalSampleCoverageCaseGz
+workflow process_coverage_info {
+	File sampleSummaryFilesGzipped
+    File intervalSummaryFilesGzipped
+    File geneSummaryFilesGzipped
+    Int diskSpace
+    String memory
+    String label
+    Int cutoff=25
+    Int preemptible
+    Int bootSizeDiskGb=100
+    String dockerVersion="28.0"
+    Int threads=10
 
-	String sampleSetId
-    Int intervalsPerBatch=2000
-    Int genesPerBatch=500
-    String dockerVersion="11.0"
-
-    call PrepareEnrichment_Task as PrepareEnrichment_GeneControl {
-        input: sampleCoverageGz=geneSampleCoverageControlGz,
-        	   dockerVersion=dockerVersion,
-        	   intervalsPerBatch=genesPerBatch
+    call ProcessCoverageInfoSampleTask {
+    	input:
+        	sampleSummaryFilesGzipped=sampleSummaryFilesGzipped,
+        	diskSpace=diskSpace,
+            memory=memory,
+            label=label,
+            cutoff=cutoff,
+            bootSizeDiskGb=bootSizeDiskGb,
+            preemptible=preemptible,
+            dockerVersion=dockerVersion
     }
 
-    call PrepareEnrichment_Task as PrepareEnrichment_GeneCase {
-        input: sampleCoverageGz=geneSampleCoverageCaseGz,
-        	   dockerVersion=dockerVersion,
-        	   intervalsPerBatch=genesPerBatch
+    call ProcessCoverageInfoGeneTask {
+    	input:
+            geneSummaryFilesGzipped=geneSummaryFilesGzipped,
+        	diskSpace=diskSpace,
+            memory=memory,
+            label=label,
+            cutoff=cutoff,
+            bootSizeDiskGb=bootSizeDiskGb,
+            preemptible=preemptible,
+            dockerVersion=dockerVersion,
+            threads=threads
     }
 
-    call PrepareEnrichment_Task as PrepareEnrichment_IntervalControl {
-        input: sampleCoverageGz=intervalSampleCoverageControlGz,
-        	   dockerVersion=dockerVersion,
-        	   intervalsPerBatch=intervalsPerBatch
+    call ProcessCoverageInfoIntervalTask {
+    	input:
+            intervalSummaryFilesGzipped=intervalSummaryFilesGzipped,
+        	diskSpace=diskSpace,
+            memory=memory,
+            label=label,
+            cutoff=cutoff,
+            bootSizeDiskGb=bootSizeDiskGb,
+            preemptible=preemptible,
+            dockerVersion=dockerVersion,
+            threads=threads
     }
-
-    call PrepareEnrichment_Task as PrepareEnrichment_IntervalCase {
-        input: sampleCoverageGz=intervalSampleCoverageCaseGz,
-        	   dockerVersion=dockerVersion,
-        	   intervalsPerBatch=intervalsPerBatch
-    }
-
-    scatter (i in range(length(PrepareEnrichment_GeneControl.shards))) {
-        call Comparison_Task as Comparison_GeneTask {
-            input: controlShard=PrepareEnrichment_GeneControl.shards[i],
-            	   caseShard=PrepareEnrichment_GeneCase.shards[i],
-                   geneOrInterval="gene",
-            	   dockerVersion=dockerVersion
-        }
-    }
-
-    scatter (i in range(length(PrepareEnrichment_IntervalControl.shards))) {
-        call Comparison_Task as Comparison_IntervalTask {
-            input: controlShard=PrepareEnrichment_IntervalControl.shards[i],
-            	   caseShard=PrepareEnrichment_IntervalCase.shards[i],
-                   geneOrInterval="interval",
-            	   dockerVersion=dockerVersion
-        }
-    }
-
-    call GatherShards_Task as GatherShards_GeneTask {
-    	input: dockerVersion=dockerVersion,
-               shards=Comparison_GeneTask.result,
-               sampleSetId=sampleSetId
-	}
-
-    call GatherShards_Task as GatherShards_IntervalTask {
-    	input: dockerVersion=dockerVersion,
-               shards=Comparison_IntervalTask.result,
-               sampleSetId=sampleSetId
-	}
-
-    output {
-    	GatherShards_GeneTask.combinedIntervals
-        GatherShards_IntervalTask.combinedIntervals
-	}
 }
 
-task GatherShards_Task {
-    Array[File] shards
-    File firstShard = shards[0]
-	String sampleSetId
+task ProcessCoverageInfoSampleTask {
+	File sampleSummaryFilesGzipped
+    Int diskSpace
+    String memory
+    String label
+    Int cutoff
+    Int preemptible
+    String bootSizeDiskGb
     String dockerVersion
 
     command <<<
-        # Add the column headers into the final file
-        echo "cat ${firstShard} | head -n1 > '${sampleSetId}.intervals_combined.txt'"
-        cat ${firstShard} | head -n1 > "${sampleSetId}.intervals_combined.txt"
-
-        # Add content from each of the shards (minus the headers) into the final file
-        for f in ${sep = ' ' shards}
-        do
-        	cat $f | tail -n +2 >> "${sampleSetId}.intervals_combined.txt"
-        done
-
-        echo "Number of lines in final concatentated file:"
-        echo "cat ${sampleSetId}.intervals_combined.txt | wc -l"
-        cat ${sampleSetId}.intervals_combined.txt | wc -l
-    >>>
-
-    runtime {
-        docker: "vanallenlab/depth_of_coverage_summary:${dockerVersion}"
-    }
-
-    output {
-        File combinedIntervals="${sampleSetId}.intervals_combined.txt"
-    }
-}
-
-
-task Comparison_Task {
-	String dockerVersion
-    File controlShard
-    File caseShard
-    String geneOrInterval
-
-    command <<<
-        mkdir outputs
-       	python /differential_coverage_analysis.py --fractions_case ${caseShard} --fractions_control ${controlShard} --output_folder outputs --gene_or_interval ${geneOrInterval}
-
-        echo "ls -lh outputs"
-        ls -lh outputs
-
-        echo "mv outputs/* /cromwell_root/"
-        mv outputs/* /cromwell_root/
-
-        echo "ls -lh /cromwell_root/"
-        ls -lh /cromwell_root/
-    >>>
-
-    output {
-    	File result="${geneOrInterval}_dc_report.tsv"
-    }
-
-    runtime {
-        docker: "vanallenlab/depth_of_coverage_summary:${dockerVersion}"
-        preemptible: 3
-    }
-}
-
-
-task PrepareEnrichment_Task {
-    File sampleCoverageGz
-    Int intervalsPerBatch
-	String dockerVersion
-    Int prepare_disk_gb
-
-    command <<<
-        set -xeuo pipefail
-        function runtimeInfo() {
+    	# log resource usage for debugging purposes
+       	function runtimeInfo() {
         	echo [$(date)]
         	echo \* CPU usage: $(top -bn 2 -d 0.01 | grep '^%Cpu' | tail -n 1 | awk '{print $2}')%
         	echo \* Memory usage: $(free -m | grep Mem | awk '{ OFMT="%.0f"; print ($3/$2)*100; }')%
@@ -148,50 +70,152 @@ task PrepareEnrichment_Task {
         }
         while true;
         	do runtimeInfo;
-           	sleep 30;
+           	sleep 15;
        	done &
 
-    	# Unzip the bzipped file
-        echo "zcat ${sampleCoverageGz} > coverage.txt"
-        zcat ${sampleCoverageGz} > coverage.txt
+        tar -xvzf ${sampleSummaryFilesGzipped}
 
-        echo "ls -lh coverage.txt"
-        ls -lh coverage.txt
+        echo "ls -lh"
+        ls -lh
 
-        # Split the merged file into # 20,000 / intervalsPerBatch files (exclude the header)
-        tail -n +2 coverage.txt | split -l ${intervalsPerBatch} - split_
+        echo "mkdir output"
+        mkdir output
 
-        echo "Word counts after split..."
-        for f in $(ls split_*); do echo $f; cat $f | wc -l;  done
+        echo "ls -lh sample_summary_files | wc"
+        ls -lh sample_summary_files | wc
 
-        # Add the header back in for each of sharded files
-        echo "Adding the header back in...."
-        for file in split_*
-        do
-            head -n 1 coverage.txt > tmp_file
-            cat $file >> tmp_file
-            mv -f tmp_file $file
-        done
+        # Run Python splice junction discovery script
+        echo "python /process_coverage_info.py --label ${label} --sample sample_summary_files --cutoff ${cutoff} --output /cromwell_root/"
+        python /process_coverage_info.py --label ${label} --sample sample_summary_files --cutoff ${cutoff} --output /cromwell_root/
 
-        echo "Word counts after adding headers in..."
-        for f in $(ls split_*); do echo $f; cat $f | wc -l;  done
+        echo "Output files in /cromwell_root/:"
+        ls -lh /cromwell_root/
 
-        # Keep track of the column headers for use later in this workflow
-        head -n 1 coverage.txt > column_headers.txt
-
-        echo "Number of lines in original file:"
-        echo "cat coverage.txt | wc -l"
-        cat coverage.txt | wc -l
     >>>
 
     output {
-        Array[File] shards=glob('split_*')
-        File columnHeaders="column_headers.txt"
+		File mean_coverage_by_sample="${label}_mean_coverage_by_sample_id.tsv"
     }
 
     runtime {
-        docker: "vanallenlab/depth_of_coverage_summary:${dockerVersion}"
-		preemptible: 3
-        disks: "local-disk ${prepare_disk_gb} HDD"
+      	docker: "vanallenlab/depth_of_coverage_summary:${dockerVersion}"
+        memory: "${memory}"
+        disks: "local-disk " + diskSpace + " HDD"
+        bootDiskSizeGb: "${bootSizeDiskGb}"
+        preemptible: preemptible
+    }
+}
+
+task ProcessCoverageInfoGeneTask {
+    File geneSummaryFilesGzipped
+    Int diskSpace
+    String memory
+    String label
+    Int cutoff
+    Int preemptible
+    String bootSizeDiskGb
+    String dockerVersion
+	Int threads
+
+    command <<<
+    	# log resource usage for debugging purposes
+       	function runtimeInfo() {
+        	echo [$(date)]
+        	echo \* CPU usage: $(top -bn 2 -d 0.01 | grep '^%Cpu' | tail -n 1 | awk '{print $2}')%
+        	echo \* Memory usage: $(free -m | grep Mem | awk '{ OFMT="%.0f"; print ($3/$2)*100; }')%
+        	echo \* Disk usage: $(df | grep cromwell_root | awk '{ print $5 }')
+        }
+        while true;
+        	do runtimeInfo;
+           	sleep 15;
+       	done &
+
+        tar -xvzf ${geneSummaryFilesGzipped}
+
+        echo "ls -lh"
+        ls -lh
+
+        echo "mkdir output"
+        mkdir output
+
+        echo "ls -lh gene_summary_files | wc"
+        ls -lh gene_summary_files | wc
+
+        # Run Python splice junction discovery script
+        echo "python /process_coverage_info.py --label ${label} --cutoff ${cutoff} --output /cromwell_root/ --gene gene_summary_files"
+        python /process_coverage_info.py --label ${label} --cutoff ${cutoff} --output /cromwell_root/ --gene gene_summary_files --threads ${threads}
+
+        echo "Output files in /cromwell_root/:"
+        ls -lh /cromwell_root/
+
+    >>>
+
+    output {
+		File per_sample_gene_fraction="${label}_gene_fraction_above_15_coverage_per_sample.tsv.gz"
+    }
+
+    runtime {
+      	docker: "vanallenlab/depth_of_coverage_summary:${dockerVersion}"
+        memory: "${memory}"
+        disks: "local-disk " + diskSpace + " HDD"
+        bootDiskSizeGb: "${bootSizeDiskGb}"
+        preemptible: preemptible
+    }
+}
+
+task ProcessCoverageInfoIntervalTask {
+    File intervalSummaryFilesGzipped
+    Int diskSpace
+    String memory
+    String label
+    Int cutoff
+    Int preemptible
+    String bootSizeDiskGb
+    String dockerVersion
+    Int threads
+
+    command <<<
+    	# log resource usage for debugging purposes
+       	function runtimeInfo() {
+        	echo [$(date)]
+        	echo \* CPU usage: $(top -bn 2 -d 0.01 | grep '^%Cpu' | tail -n 1 | awk '{print $2}')%
+        	echo \* Memory usage: $(free -m | grep Mem | awk '{ OFMT="%.0f"; print ($3/$2)*100; }')%
+        	echo \* Disk usage: $(df | grep cromwell_root | awk '{ print $5 }')
+        }
+        while true;
+        	do runtimeInfo;
+           	sleep 15;
+       	done &
+
+        tar -xvzf ${intervalSummaryFilesGzipped}
+
+        echo "ls -lh"
+        ls -lh
+
+        echo "mkdir output"
+        mkdir output
+
+        echo "ls -lh interval_summary_files | wc"
+        ls -lh interval_summary_files | wc
+
+        # Run Python splice junction discovery script
+        echo "python /process_coverage_info.py --label ${label} --cutoff ${cutoff} --output /cromwell_root/ --interval interval_summary_files"
+        python /process_coverage_info.py --label ${label} --cutoff ${cutoff} --output /cromwell_root/ --interval interval_summary_files --threads ${threads}
+
+        echo "Output files in /cromwell_root/:"
+        ls -lh /cromwell_root/
+
+    >>>
+
+    output {
+        File per_sample_interval_fraction="${label}_interval_fraction_above_15_coverage_per_sample.tsv.gz"
+    }
+
+    runtime {
+      	docker: "vanallenlab/depth_of_coverage_summary:${dockerVersion}"
+        memory: "${memory}"
+        disks: "local-disk " + diskSpace + " HDD"
+        bootDiskSizeGb: "${bootSizeDiskGb}"
+        preemptible: preemptible
     }
 }

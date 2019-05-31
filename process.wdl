@@ -1,5 +1,5 @@
 workflow process_coverage_info {
-	Array[File] sampleSummaryFiles
+    Array[File] sampleSummaryFiles
     Array[File] intervalSummaryFiles
     Array[File] geneSummaryFiles
     Int diskSpace
@@ -8,7 +8,7 @@ workflow process_coverage_info {
     Int cutoff=25
     Int preemptible
     Int bootSizeDiskGb=100
-    String dockerVersion
+    String dockerVersion="28.0"
     Int threads=10
 
     call ProcessCoverageInfoSampleTask {
